@@ -38,6 +38,7 @@ api_token="secret"
   # The GitHub repository URL being https://github.com/coq/coq
   gitlab="coq/coq"
   # The GitLab repository URL being https://gitlab.com/coq/coq
+  mirror="false" # Enable push mirroring
 
   [mappings.opam-coq-archive]
   github="coq/opam-coq-archive"

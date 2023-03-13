@@ -25,6 +25,14 @@ let port toml_data =
     ~default:
       (Option.value_map (Sys.getenv "PORT") ~f:Int.of_string ~default:8000)
 
+let mirror toml_data =
+  match subkey_value toml_data "gitlab" "mirror" with
+  | Some "true" -> true
+  | Some "false" | None -> false
+  | Some value ->
+     Stdio.printf "Cannot recognize value '%s' for gitlab.mirror, bool expected.\n" value;
+     false
+
 let gitlab_access_token toml_data =
   match subkey_value toml_data "gitlab" "api_token" with
   | None ->

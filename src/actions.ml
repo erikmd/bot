@@ -2272,6 +2272,21 @@ let remove_labels_if_present ~bot_info (issue : issue_info) labels =
     |> add_remove_labels ~bot_info ~add:false issue )
   |> Lwt.async
 
+(* TODO: ensure there's no race condition for 2 push with very close timestamps *)
+let mirror_action ~bot_info ?(force = true) ~base_ref ~head_sha () =
+  match bot_info with
+  | { gitlab_token; github_pat; github_install_token; name; email; domain;
+      app_id } -> _
+  let local_base_branch = head_sha in
+  let gh_ref = { repo_url = ""; name = base_ref} in
+  let gl_ref = { repo_url = ""; name = base_ref} in
+  git_fetch gh_ref local_base_branch
+  |> execute_cmd
+  >>= (fun () ->
+    
+    git_push ?force gl_ref local_base_branch)
+
+(* TODO: ensure there's no race condition for 2 push with very close timestamps *)
 let update_pr ?full_ci ?(skip_author_check = false) ~bot_info
     (pr_info : issue_info pull_request_info) ~gitlab_mapping ~github_mapping =
   let open Lwt_result.Infix in
@@ -2582,7 +2597,7 @@ let project_action ~bot_info ~(issue : issue) ~column_id =
   | _ ->
       Lwt_io.printf "This was not a request inclusion column: ignoring.\n"
 
-let push_action ~bot_info ~base_ref ~commits_msg =
+let coq_push_action ~bot_info ~base_ref ~commits_msg =
   Stdio.printf "Merge and backport commit messages:\n" ;
   let commit_action commit_msg =
     if string_match ~regexp:"^Merge PR #\\([0-9]*\\):" commit_msg then
