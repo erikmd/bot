@@ -85,6 +85,8 @@ val coq_push_action :
 val mirror_action :
      bot_info:Bot_info.t
   -> ?force:bool
+  -> owner:string
+  -> repo:string
   -> base_ref:string
   -> head_sha:string
   -> unit

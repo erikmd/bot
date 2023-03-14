@@ -2273,18 +2273,27 @@ let remove_labels_if_present ~bot_info (issue : issue_info) labels =
   |> Lwt.async
 
 (* TODO: ensure there's no race condition for 2 push with very close timestamps *)
-let mirror_action ~bot_info ?(force = true) ~base_ref ~head_sha () =
-  match bot_info with
-  | { gitlab_token; github_pat; github_install_token; name; email; domain;
-      app_id } -> _
-  let local_base_branch = head_sha in
-  let gh_ref = { repo_url = ""; name = base_ref} in
-  let gl_ref = { repo_url = ""; name = base_ref} in
-  git_fetch gh_ref local_base_branch
-  |> execute_cmd
-  >>= (fun () ->
-    
-    git_push ?force gl_ref local_base_branch)
+let mirror_action ~bot_info ?(force = true) ~owner ~repo ~base_ref ~head_sha ()
+    =
+  (let open Lwt_result.Infix in
+  let local_ref = head_sha in
+  let gh_ref =
+    {repo_url= f "https://github.com/%s/%s" owner repo; name= base_ref}
+  in
+  (* TODO: generalize to case where mapping is not one-to-one *)
+  let gl_ref =
+    { repo_url= gitlab_repo ~bot_info ~gitlab_full_name:(owner ^ "/" ^ repo)
+    ; name= base_ref }
+  in
+  git_fetch gh_ref local_ref |> execute_cmd
+  >>=
+  fun () -> git_push ~force ~remote_ref:gl_ref ~local_ref () |> execute_cmd )
+  >>= function
+  | Ok () ->
+      Lwt.return_unit
+  | Error e ->
+      Lwt_io.printlf "Error while mirroring branch %s of repository %s/%s: %s"
+        base_ref owner repo e
 
 (* TODO: ensure there's no race condition for 2 push with very close timestamps *)
 let update_pr ?full_ci ?(skip_author_check = false) ~bot_info
