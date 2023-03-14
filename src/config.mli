@@ -8,8 +8,6 @@ val string_of_mapping : (string, string) Base.Hashtbl.t -> string
 
 val port : Toml.Types.table -> int
 
-val mirror : Toml.Types.table -> bool
-
 val gitlab_access_token : Toml.Types.table -> string
 
 val github_access_token : Toml.Types.table -> string
