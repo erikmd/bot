@@ -263,7 +263,9 @@ Once you finish the installation, follow these steps:
   ```
   [mapping]
   gitlab = "owner/repo"
+  gitlab_domain = "gitlab.com"
   ```
+  If omitted, the `gitlab_domain` value defaults to `"gitlab.com"`.
   If you use other instance of **@coqbot**, this repository-specific
   configuration file becomes `BOT_NAME.toml` where `BOT_NAME` is the name
   of the bot.
