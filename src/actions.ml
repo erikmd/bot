@@ -18,10 +18,10 @@ type coq_job_info =
   ; opam_switch: string }
 
 let send_status_check ~bot_info job_info ~pr_num (gh_owner, gh_repo)
-    ~github_repo_full_name ~gitlab_repo_full_name ~context ~failure_reason
+    ~github_repo_full_name ~gitlab_domain ~gitlab_repo_full_name ~context ~failure_reason
     ~external_id ~trace =
   let job_url =
-    f "https://gitlab.com/%s/-/jobs/%d" gitlab_repo_full_name job_info.build_id
+    f "https://%s/%s/-/jobs/%d" gitlab_domain gitlab_repo_full_name job_info.build_id
   in
   let trace_lines =
     trace
@@ -543,7 +543,7 @@ let trace_action ~repo_full_name trace =
      else Warn trace )
 
 let job_failure ~bot_info job_info ~pr_num (gh_owner, gh_repo)
-    ~github_repo_full_name ~gitlab_repo_full_name ~context ~failure_reason
+    ~github_repo_full_name ~gitlab_domain ~gitlab_repo_full_name ~context ~failure_reason
     ~external_id =
   let build_id = job_info.build_id in
   let project_id = job_info.common_info.project_id in
@@ -563,7 +563,7 @@ let job_failure ~bot_info job_info ~pr_num (gh_owner, gh_repo)
   | Warn trace ->
       Lwt_io.printf "Actual failure.\n"
       <&> send_status_check ~bot_info job_info ~pr_num (gh_owner, gh_repo)
-            ~github_repo_full_name ~gitlab_repo_full_name ~context
+            ~github_repo_full_name ~gitlab_domain ~gitlab_repo_full_name ~context
             ~failure_reason ~external_id ~trace
   | Retry reason -> (
       Lwt_io.printlf "%s... Checking whether to retry the job." reason
@@ -587,7 +587,7 @@ let job_failure ~bot_info job_info ~pr_num (gh_owner, gh_repo)
       Lwt_io.printl reason
 
 let job_success_or_pending ~bot_info (gh_owner, gh_repo)
-    ({build_id} as job_info) ~github_repo_full_name ~gitlab_repo_full_name
+    ({build_id} as job_info) ~github_repo_full_name ~gitlab_domain ~gitlab_repo_full_name
     ~context ~state ~external_id =
   GitHub_queries.get_status_check ~bot_info ~owner:gh_owner ~repo:gh_repo
     ~commit:job_info.common_info.head_commit ~context
@@ -598,7 +598,7 @@ let job_success_or_pending ~bot_info (gh_owner, gh_repo)
          it.\n"
       <&>
       let job_url =
-        f "https://gitlab.com/%s/-/jobs/%d" gitlab_repo_full_name build_id
+        f "https://%s/%s/-/jobs/%d" gitlab_domain gitlab_repo_full_name build_id
       in
       let state, status, conclusion, description =
         match state with
@@ -651,11 +651,12 @@ let job_success_or_pending ~bot_info (gh_owner, gh_repo)
 let job_action ~bot_info ({build_name} as job_info) ~gitlab_mapping =
   let pr_num, branch_or_pr = pr_from_branch job_info.common_info.branch in
   let context = f "GitLab CI job %s (%s)" build_name branch_or_pr in
-  let owner, repo =
+  let gitlab_domain, owner, repo =
     let repo_url = job_info.common_info.repo_url in
-    if not (string_match ~regexp:".*:\\(.*\\)/\\(.*\\).git" repo_url) then
+    if not (string_match ~regexp:"git@\\(.*\\):\\(.*\\)/\\(.*\\).git" repo_url) then
       failwith "Could not match project name on repository url.\n" ;
-    (Str.matched_group 1 repo_url, Str.matched_group 2 repo_url)
+    (Str.matched_group 1 repo_url,
+     Str.matched_group 2 repo_url, Str.matched_group 3 repo_url)
   in
   let gitlab_repo_full_name = owner ^ "/" ^ repo in
   let gh_owner, gh_repo =
@@ -674,16 +675,16 @@ let job_action ~bot_info ({build_name} as job_info) ~gitlab_mapping =
     | "failed" ->
         let failure_reason = Option.value_exn job_info.failure_reason in
         job_failure ~bot_info job_info ~pr_num (gh_owner, gh_repo)
-          ~github_repo_full_name ~gitlab_repo_full_name ~context ~failure_reason
+          ~github_repo_full_name ~gitlab_domain ~gitlab_repo_full_name ~context ~failure_reason
           ~external_id
     | "success" as state ->
         job_success_or_pending ~bot_info (gh_owner, gh_repo) job_info
-          ~github_repo_full_name ~gitlab_repo_full_name ~context ~state
+          ~github_repo_full_name ~gitlab_domain ~gitlab_repo_full_name ~context ~state
           ~external_id
         <&> send_doc_url ~bot_info job_info ~github_repo_full_name
     | ("created" | "running") as state ->
         job_success_or_pending ~bot_info (gh_owner, gh_repo) job_info
-          ~github_repo_full_name ~gitlab_repo_full_name ~context ~state
+          ~github_repo_full_name ~gitlab_domain ~gitlab_repo_full_name ~context ~state
           ~external_id
     | "cancelled" | "canceled" | "pending" ->
         (* Ideally we should check if a status was already reported for
@@ -2273,7 +2274,7 @@ let remove_labels_if_present ~bot_info (issue : issue_info) labels =
   |> Lwt.async
 
 (* TODO: ensure there's no race condition for 2 push with very close timestamps *)
-let mirror_action ~bot_info ?(force = true) ~owner ~repo ~base_ref ~head_sha ()
+let mirror_action ~bot_info ?(force = true) ~gitlab_domain ~owner ~repo ~base_ref ~head_sha ()
     =
   (let open Lwt_result.Infix in
   let local_ref = head_sha in
@@ -2282,7 +2283,7 @@ let mirror_action ~bot_info ?(force = true) ~owner ~repo ~base_ref ~head_sha ()
   in
   (* TODO: generalize to case where mapping is not one-to-one *)
   let gl_ref =
-    { repo_url= gitlab_repo ~bot_info ~gitlab_full_name:(owner ^ "/" ^ repo)
+    { repo_url= gitlab_repo ~bot_info ~gitlab_domain ~gitlab_full_name:(owner ^ "/" ^ repo)
     ; name= base_ref }
   in
   git_fetch gh_ref local_ref |> execute_cmd

@@ -219,13 +219,26 @@ let callback _conn req body =
             ()
       | Ok (true, PushEvent {owner; repo; base_ref; head_sha; _}) -> (
         match (owner, repo) with
-        | "coq-community", ("docker-base" | "docker-coq")
-        (*| "math-comp", ("docker-mathcomp" | "math-comp")*) ->
+        | "coq-community", ("docker-base" | "docker-coq") ->
             (fun () ->
               init_git_bare_repository ~bot_info
               >>= fun () ->
               action_as_github_app ~bot_info ~key ~app_id ~owner ~repo
-                (mirror_action ~owner ~repo ~base_ref ~head_sha ()) )
+                (mirror_action ~gitlab_domain:"gitlab.com" ~owner ~repo ~base_ref ~head_sha ()) )
+            |> Lwt.async ;
+            Server.respond_string ~status:`OK
+              ~body:
+                (f
+                   "Processing push event on %s/%s repository: mirroring \
+                    branch on GitLab."
+                   owner repo )
+              ()
+        | "math-comp", ("docker-mathcomp" | "math-comp") ->
+            (fun () ->
+              init_git_bare_repository ~bot_info
+              >>= fun () ->
+              action_as_github_app ~bot_info ~key ~app_id ~owner ~repo
+                (mirror_action ~gitlab_domain:"gitlab.inria.fr" ~owner ~repo ~base_ref ~head_sha ()) )
             |> Lwt.async ;
             Server.respond_string ~status:`OK
               ~body:
